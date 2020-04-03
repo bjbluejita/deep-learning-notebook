@@ -1,0 +1,6 @@
+classes= 80
+train=/content/data/trainlist.txt
+valid=E:/ML_data/val.txt
+names=/content/data/coco.names
+backup=backup/
+eval=coco

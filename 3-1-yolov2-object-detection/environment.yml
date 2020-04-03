@@ -1,0 +1,58 @@
+name: yad2k
+channels:
+- defaults
+dependencies:
+- cycler=0.10.0=py36_0
+- h5py=2.7.0=np112py36_0
+- matplotlib=2.0.0=np112py36_0
+- mkl=2017.0.1=0
+- numpy=1.12.1=py36_0
+- olefile=0.44=py36_0
+- pillow=4.1.0=py36_0
+- pip=9.0.1=py36_1
+- pyparsing=2.1.4=py36_0
+- pyqt=5.6.0=py36_2
+- python=3.6.1=0
+- python-dateutil=2.6.0=py36_0
+- pytz=2017.2=py36_0
+- pyyaml=3.12=py36_0
+- scipy=0.19.0=np112py36_0
+- sip=4.18=py36_0
+- six=1.10.0=py36_0
+- wheel=0.29.0=py36_0
+- yaml=0.1.6=0
+- pip:
+  - setuptools==27.2.0
+  - libxml2==2.9.4
+  - libgcc==5.2.0
+  - libpng==1.6.27
+  - dbus==1.10.10
+  - gstreamer==1.8.0
+  - libxcb==1.12
+  - openssl==1.0.2k
+  - jbig==2.1
+  - readline==6.2
+  - libtiff==4.0.6
+  - gst-plugins-base==1.8.0
+  - libgfortran==.0.0
+  - fontconfig==.12.1
+  - xz==5.2.2
+  - icu==54.1
+  - jpeg==9b
+  - freetype==2.5.5
+  - expat==2.1.0
+  - tk==8.5.18
+  - hdf5==1.8.17
+  - libiconv==1.14
+  - zlib==1.2.8
+  - glib==2.50.2
+  - qt==5.6.2
+  - sqlite==3.13.0
+  - pcre==8.39
+  - libffi==3.2.1
+  - keras==2.0.3
+  - protobuf==3.2.0
+  - pydot-ng==1.0.0
+  - tensorflow-gpu==1.0.1
+  - theano==0.9.0
+prefix: /home/allan/anaconda3/envs/yad2k
