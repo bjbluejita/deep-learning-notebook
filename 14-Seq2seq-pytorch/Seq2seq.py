@@ -92,6 +92,7 @@ def readLangs( corpusFilePath, lang1, lang2, reverse=False ):
 
     # Split every line into pairs and normalize
     pairs = [ [ normalizeString( s ) for s in l.split( '\t' ) ] for l in lines ]
+    pairs = [ [ s[0], s[1]] for s in pairs ]
 
     # Reverse pairs, make Lang instances
     if reverse:
@@ -116,9 +117,9 @@ eng_prefixes = (
 )
 
 def filterPair( p ):
-    return len( p[0].split( ' ' )) < MAX_LENGTH and \
-        len( p[1].split( ' ' )) < MAX_LENGTH and \
-        p[1].startswith( eng_prefixes )
+    return len( p[0].split( ' ' )) < MAX_LENGTH \
+        and len( p[1].split( ' ' )) < MAX_LENGTH
+        # and p[1].startswith( eng_prefixes )
 
 def filterPairs( paris ):
     return [ pari for pari in paris if filterPair( pari ) ]
@@ -353,7 +354,7 @@ def trainIters( encoder, decoder, n_iters, print_every=1000, plot_every=100, lea
 
             showPlot( plt, ax, plot_losses )
 
-        if iter % 2000 == 0:
+        if iter % int( n_iters / 50 ) == 0:
             print( 'Saving model...' )
             torch.save( encoder.state_dict(), encoderFilePath )
             torch.save( decoder.state_dict(), decoderFilePath )
