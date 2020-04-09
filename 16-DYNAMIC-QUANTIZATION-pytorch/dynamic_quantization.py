@@ -5,7 +5,7 @@
 @Time    :   2020/04/08 12:04:47
 @Author  :   LY 
 @Version :   1.0
-@URL     :
+@URL     :   https://pytorch.org/tutorials/advanced/dynamic_quantization_tutorial.html
 @License :   (C)Copyright 2017-2020
 @Desc    :   None
 '''
@@ -188,7 +188,7 @@ def evaluate( model_, data_source ):
 # torch.quantization.quantize_dynamic on the model:
 # 1 specify the nn.LSTM and nn.Linear modules in our model to be quantized
 # 2 specify the weights to be converted to int8 values
-print( torch.backends.quantized.support_engines )
+print( torch.backends.quantized.supported_engines )
 quantized_model = torch.quantization.quantize_dynamic(
     model, { nn.LSTM, nn.Linear }, dtype=torch.qint8
 )
