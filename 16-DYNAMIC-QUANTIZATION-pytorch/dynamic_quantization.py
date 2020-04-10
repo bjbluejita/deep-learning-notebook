@@ -127,7 +127,7 @@ with open( os.path.join( model_data_filepath, 'out.txt'), 'w' ) as outf:
         for i in range( num_words ):
             output, hidden = model( input_, hidden )
             word_weights = output.squeeze().div( temperature ).exp().cpu()
-            word_idx = torch.multinomial( word_weights, 1 )[ 0 ]
+            word_idx = torch.multinomial( word_weights, 1 )[ 0 ]  # 抽样。
             input_.fill_( word_idx )
 
             word = corpus.dictionary.idx2word[ word_idx ]
@@ -193,7 +193,3 @@ quantized_model = torch.quantization.quantize_dynamic(
     model, { nn.LSTM, nn.Linear }, dtype=torch.qint8
 )
 print( quantized_model )
-
-
-
-
