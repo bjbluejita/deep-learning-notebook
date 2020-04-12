@@ -14,6 +14,7 @@ import argparse
 import time
 import math
 import os
+import sys
 import torch
 import torch.nn as nn
 import torch.onnx
@@ -36,7 +37,7 @@ parser.add_argument('--lr', type=float, default=20,
                     help='initial learning rate')
 parser.add_argument('--clip', type=float, default=0.25,
                     help='gradient clipping')
-parser.add_argument('--epochs', type=int, default=40,
+parser.add_argument('--epochs', type=int, default=1,
                     help='upper epoch limit')
 parser.add_argument('--batch_size', type=int, default=20, metavar='N',
                     help='batch size')
@@ -50,7 +51,7 @@ parser.add_argument('--seed', type=int, default=1111,
                     help='random seed')
 parser.add_argument('--cuda', action='store_true',
                     help='use CUDA')
-parser.add_argument('--log-interval', type=int, default=200, metavar='N',
+parser.add_argument('--log_interval', type=int, default=200, metavar='N',
                     help='report interval')
 parser.add_argument('--save', type=str, default='model.pt',
                     help='path to save the final model')
@@ -66,6 +67,7 @@ print( args )
 # Set the random seed manually for reproducibility.
 torch.manual_seed( args.seed )
 device = torch.device( 'cuda' if torch.cuda.is_available() else 'cpu' )
+# device = torch.device( 'cpu' )
 
 ###############################################################################
 # Load data
@@ -122,7 +124,7 @@ def evaluate( data_source ):
         hidden = model.init_hidden( eval_batch_size )
     with torch.no_grad():
         for i in range( 0, data_source.size(0) - 1, args.bptt ):
-            data, target = get_batch( data_source, i )
+            data, targets = get_batch( data_source, i )
             if args.model == 'Transformer':
                 output = model( data )
                 output = output.view( -1, ntokens )
@@ -166,10 +168,10 @@ def train():
         if batch % args.log_interval == 0 and batch > 0:
             cur_loss = total_loss / args.log_interval
             elapsed = time.time() - start_time
-            print( '|epoch{:3d} |{:5d}/{:5d} batches|lr {02.2f}|ms/batch {:5.2f}'
-                   '| loss {05.2f} | ppl {"8.2f'.format(
+            print( '|epoch{:3d} |{:5d}/{:5d} batches|lr {:02.2f}|ms/batch {:5.2f}'
+                   '| loss {:5.2f} | ppl {:8.2f}'.format(
                        epoch, batch, len( train_data ) // args.bptt, lr,
-                       elapsed * 1000 / args.log_interval, cur_loss, match.exp( cur_loss ) )
+                       elapsed * 1000 / args.log_interval, cur_loss, math.exp( cur_loss ) )
                    )
             total_loss = 0
             start_time = time.time()
@@ -189,12 +191,12 @@ best_val_loss = None
 
 # At any point you can hit Ctrl + C to break out of training early.
 try:
-    for epoch in range( 1, args.epoch + 1 ):
+    for epoch in range( 1, args.epochs + 1 ):
         epoch_start_time = time.time()
         train()
         val_loss = evaluate( val_data )
         print( '-' * 89 )
-        print( '| end of epoch{:3d} | time:{5.2f}s | valid loss{:5.2f}|'
+        print( '| end of epoch{:3d} | time:{:5.2f}s | valid loss{:5.2f}|'
                '|valid ppl {:8.2f}'.format( epoch, ( time.time() - epoch_start_time ),
                                             val_loss, math.exp( val_loss ) ) )
         print( '-' * 89 )
@@ -209,6 +211,8 @@ try:
 except KeyboardInterrupt:
     print( '-' * 89 )
     print( 'Exiting from training early' )
+    sys.exit( 0 )
+
 
 # Load the best saved model
 with open( args.save, 'rb' ) as f:
@@ -222,12 +226,9 @@ with open( args.save, 'rb' ) as f:
 # Run on test data.
 test_loss = evaluate( test_data )
 print( '+' * 89 )
-print( '|End of training| test loss{:5.2f} | test ppl {:8.2f}'.format(
-           test_loss, math.exp( test_loss)
-        )
-)
+print( '|End of training| test loss{:5.2f} | test ppl {:8.2f}'.format( test_loss, math.exp( test_loss) ) )
 
-if len( args.onnx_export > 0 ):
+if len( args.onnx_export ) > 0:
     export_onnx( args.onnx_export, batch_size=1, seq_len=args.bptt )
 
 

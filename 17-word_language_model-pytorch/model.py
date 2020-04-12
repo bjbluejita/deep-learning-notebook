@@ -19,7 +19,7 @@ class RNNModel( nn.Module ):
     '''Container module with an encoder, a recurrent module, and a decoder.'''
 
     def __init__( self, rnn_type, ntoken, ninp, nhid, nlayers, dropout=0.5, tie_weights=False ):
-        supper( RNNModel, self ).__init__()
+        super( RNNModel, self ).__init__()
         self.ntoken = ntoken
         self.drop = nn.Dropout( dropout )
         self.encoder = nn.Embedding( ntoken, ninp )
@@ -52,10 +52,11 @@ class RNNModel( nn.Module ):
         self.decoder.weight.data.uniform_( -initrange, initrange )
     
     def forward( self, input, hidden ):
-        emb = self.dropout( self.encoder( input ) )
+        emb = self.drop( self.encoder( input ) )
         output, hidden = self.rnn( emb, hidden )
         output = self.drop( output )
         decoded = self.decoder( output )
+        decoded = decoded.view( -1, self.ntoken )
         return F.log_softmax( decoded, dim=1 ), hidden
 
     def init_hidden( self, bsz ):
