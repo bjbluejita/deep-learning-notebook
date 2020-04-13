@@ -17,7 +17,7 @@ import data
 parser = argparse.ArgumentParser( description='PyTorch Wikitext-2 Language Model' )
 
 # Model parameters.
-parser.add_argument('--data', type=str, default='./data/wikitext-2',
+parser.add_argument('--data', type=str, default='E:/ML_data/wikitext-2',
                     help='location of the data corpus')
 parser.add_argument('--checkpoint', type=str, default='./model.pt',
                     help='model checkpoint to use')
@@ -50,11 +50,11 @@ corpus = data.Corpus( args.data )
 ntokens = len( corpus.dictionary )
 
 is_transformer_model = hasattr( model, 'model_type' ) and model.model_type == 'Transformer'
-if is_transformer_model:
+if not is_transformer_model:
     hidden = model.init_hidden( 1 )
-input = torch.randint( ntokens, ( 1, 1 ), dtype=torch.long ).to( deive )
+input = torch.randint( ntokens, ( 1, 1 ), dtype=torch.long ).to( device )
 
-with open( args.outf, 'w' ) as outf:
+with open( args.outf, 'w', encoding='utf-8' ) as outf:
     with torch.no_grad():
         for i in range( args.words ):
             if is_transformer_model:
@@ -75,5 +75,3 @@ with open( args.outf, 'w' ) as outf:
 
             if i % args.log_interval == 0:
                 print('| Generated {}/{} words'.format(i, args.words))
-
-
