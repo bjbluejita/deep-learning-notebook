@@ -25,7 +25,7 @@ import model
 parser = argparse.ArgumentParser(description='PyTorch Wikitext-2 RNN/LSTM/GRU/Transformer Language Model')
 parser.add_argument('--data', type=str, default='E:/ML_data/wikitext-2',
                     help='location of the data corpus')
-parser.add_argument('--model', type=str, default='LSTM',
+parser.add_argument('--model', type=str, default='Transformer',
                     help='type of recurrent net (RNN_TANH, RNN_RELU, LSTM, GRU, Transformer)')
 parser.add_argument('--emsize', type=int, default=200,
                     help='size of word embeddings')
