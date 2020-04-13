@@ -149,14 +149,14 @@ class TransformerModel( nn.Module ):
         if has_mask:
             device =src.device
             if self.src_mask is None or self.src_mask.size(0) != len( src ):
-                mask = self._generate_square_subsequent_mask( src ).to( device )
+                mask = self._generate_square_subsequent_mask( len(src) ).to( device )
                 self.src_mask = mask
         else:
             self.src_mask = None
 
         src = self.encoder( src ) * math.sqrt( self.ninp )
         src = self.pos_encoder( src )
-        output = self.transformer_encoder( src, src_mask )
+        output = self.transformer_encoder( src, self.src_mask )
         output = self.decoder( output )
         return F.log_softmax( output, dim=-1 )
 
