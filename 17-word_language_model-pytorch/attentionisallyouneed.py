@@ -171,7 +171,7 @@ class DecoderLayer( nn.Module ):
         "Follow Figure 1 (right) for connections."
         m = memory
         x = self.sublayer[0]( x, lambda x: self.self_attn( x, x, x, tgt_mask ) )
-        x = self.sublayer[1]( x, lambda x: self.src_attn( x, x, x, src_mask ) )
+        x = self.sublayer[1]( x, lambda x: self.src_attn( x, m, m, src_mask ) )
         return self.sublayer[2]( x, self.feed_forward )
 
 # %% [markdown]
@@ -224,10 +224,10 @@ def attention( query, key, value, mask=None, dropout=None ):
 # “多头”机制能让模型考虑到不同位置的Attention，另外“多头”Attention可以在不同的子空间表示不一样的关联关系，使用单个Head的Attention一般达不到这种效果。
 
 # %%
-class MultiHeadedAttention( nn.Module ):
+class MultiHeaderAttention( nn.Module ):
     def __init__( self, h, d_model, dropout=0.1 ):
         "Take in model size and number of heads."
-        super( MultiHeadedAttention, self ).__init__()
+        super( MultiHeaderAttention, self ).__init__()
         assert d_model % h == 0
         # We assume d_v always equals d_k
         self.d_k = d_model // h
@@ -242,7 +242,7 @@ class MultiHeadedAttention( nn.Module ):
             mask = mask.unsqueeze( 1 )
         nbatches = query.size( 0 )
         # 1) Do all the linear projections in batch from d_model => h x d_k 
-        query, key, value = [ l(x).view( nbatches, -1, self.h, self.d_k ).transpose( 1, 2 )
+        query, key, value =             [ l(x).view( nbatches, -1, self.h, self.d_k ).transpose( 1, 2 )
               for l, x in zip( self.linears, ( query, key, value )) ]
         # 2) Apply attention on all the projected vectors in batch.
         x, self.attn = attention( query, key, value, mask=mask, dropout=self.dropout )
@@ -304,13 +304,6 @@ class PositionalEncoding( nn.Module ):
         return self.dropout( x )
 
 
-# %%
-plt.figure( figsize=( 15, 5) )
-pe = PositionalEncoding( 20, 0 )
-y = pe.forward( Variable( torch.zeros( 1, 100, 20 ) ))
-plt.plot(np.arange(100), y[0, :, 4:8].data.numpy())
-plt.legend(["dim %d"%p for p in [4,5,6,7]])
-
 # %% [markdown]
 # 
 # Here we define a function that takes in hyperparameters and produces a full model.
@@ -319,7 +312,7 @@ plt.legend(["dim %d"%p for p in [4,5,6,7]])
 def make_model( src_vocab, tgt_vocab, N=6, d_model=512, d_ff=2048, h=8, dropout=0.1 ):
     "Helper: Construct a model from hyperparameters."
     c = copy.deepcopy
-    attn = MultiHeadedAttention( h, d_model )
+    attn = MultiHeaderAttention( h, d_model )
     ff = PositionwiseFeedForward( d_model, d_ff, dropout )
     position = PositionalEncoding( d_model, dropout )
 
@@ -382,10 +375,11 @@ def run_epoch( data_iter, model, loss_compute ):
     tokens = 0
 
     for i, batch in enumerate( data_iter ):
-        out = model.forward( batch.src, batch.trg,                              batch.src_mask, batch.trg_mask )
+        out = model.forward( batch.src, batch.trg, batch.src_mask, batch.trg_mask )
         loss = loss_compute( out, batch.trg_y, batch.ntokens )
         total_loss += loss
         total_tokens += batch.ntokens
+        tokens += batch.ntokens
 
         if i % 50 == 1:
             elapsed = time.time() - start
@@ -393,7 +387,7 @@ def run_epoch( data_iter, model, loss_compute ):
             start = time.time()
             tokens = 0
     
-    return total_token / total_tokens
+    return total_loss / total_tokens
 
 # %% [markdown]
 # and Batching
@@ -425,7 +419,7 @@ class NoamOpt():
     "Optim wrapper that implements rate."
     def __init__( self, model_size, factor, warmup, optimizer ):
         self.optimizer = optimizer
-        self.step = 0
+        self._step = 0
         self.warmup = warmup
         self.factor = factor
         self.model_size = model_size
@@ -501,7 +495,7 @@ v = crit( Variable( predict.log() ), Variable( torch.LongTensor( [ 2, 1, 0 ] ) )
 plt.imshow( crit.true_dist )
 
 # %% [markdown]
-# 当model对选择给出非常有信心时，实际上会开始惩罚model（防止过拟？)
+# 当model对选择给出非常有信心时， sjissjsjisjiisj实际上会开始惩罚model（防止过拟？)
 
 # %%
 crit = LabelSmoothing( 5, 0, 0.1 )
@@ -513,162 +507,49 @@ def loss( x ):
 plt.plot( np.arange(1, 100), [loss(x) for x in range(1, 100)] )
 
 # %% [markdown]
-# ample
-# 
-# ## Data Loading
+# # A First Example
 
 # %%
-# For data loading.
-from torchtext import data, datasets
+# Synthetic Data
+def data_gen( V, batch, nbatches ):
+    "Generate random data for a src-tgt copy task."
+    for i in range( nbatches ):
+        data = torch.from_numpy( np.random.randint( 1, V, size=( batch, 10 ) ) )
+        data[ :, 0 ] = 1
+        src = Variable( data, requires_grad=False ).long()
+        tgt = Variable( data, requires_grad=False ).long()
+        yield Batch( src, tgt, 0 )
 
-if True:
-    import spacy
-    spacy_de = spacy.load('de')
-    spacy_en = spacy.load('en')
-
-    def tokenize_de(text):
-        return [tok.text for tok in spacy_de.tokenizer(text)]
-
-    def tokenize_en(text):
-        return [tok.text for tok in spacy_en.tokenizer(text)]
-
-    BOS_WORD = '<s>'
-    EOS_WORD = '</s>'
-    BLANK_WORD = "<blank>"
-    SRC = data.Field(tokenize=tokenize_de, pad_token=BLANK_WORD)
-    TGT = data.Field(tokenize=tokenize_en, init_token = BOS_WORD, 
-                     eos_token = EOS_WORD, pad_token=BLANK_WORD)
-
-    MAX_LEN = 100
-    train, val, test = datasets.IWSLT.splits( exts=( '.de', '.en' ), fields=( SRC, TGT ),
-                                               filter_pred=lambda x: len( vars(x)[ 'src']) <= MAX_LEN and
-                                                  len( vars(x)[ 'trg' ]) <= MAX_LEN )
-    MIN_FREQ = 2
-    SRC.build_vocab(train.src, min_freq=MIN_FREQ)
-    TGT.build_vocab(train.trg, min_freq=MIN_FREQ)    
-
-# %% [markdown]
-# 数据迭代器
-
-# %%
-class MyIterator( data.Iterator ):
-    def create_batches( self ):
-        if self.train:
-            def pool( d, random_shuffler ):
-                for p in data.batch( d, self.batch_size * 100 ):
-                    p_batch = data.batch( sorted( p, key=self.sort_key ),
-                                           self.batch_size, self.batch_size_fn )
-                    for b in random_shuffler( list( p_batch ) ):
-                        yield b
-            self.batches = pool( self.data(), self.random_shuffler )
-        else:
-            self.batches = []
-            for b in data.batch( self.data(), self.batch_size, self.batch_size_fn ):
-                self.batches.append( sorted( b, key=self.sort_key ) )
-
-def rebatch( pad_idx, batch ):
-    "Fix order in torchtext to match ours"
-    src, trg = batch.src.transpose( 0, 1 ), batch.trg.transpose( 0, 1 )
-    return Batch( src, trg, pad_idx )
-
-# %% [markdown]
-# 最后为了快速训练，我们使用了多块     GPU。这段代码将实现多 GPU 的词生成，但它并不是针对 Transformer 的具体方法，所以这里并不会具体讨论。多 GPU 训练的基本思想即在训练过程中将词生成分割为语块（chunks），并传入不同的 GPU 实现并行处理，我们可以使用 PyTorch 并行基元实现这一点。
-
-# %%
-class MultiGPULossCompute:
-    "A multi-gpu loss compute and train function."
-    def __init__( self, generator, criterion, devices, opt=None, chunk_size=5 ):
+# Loss Computation
+class SimpleLossCompute():
+    "A simple loss compute and train function."
+    def __init__( self, generator, criterion, opt=None ):
         self.generator = generator
-        self.criterion = nn.parallel.replicate( criterion, devices=devices )
+        self.criterion = criterion
         self.opt = opt
-        self.devices = devices
-        self.chunk_size = chunk_size
 
-    def __call__( self, out, targets, normalize ):
-        total = 0.0
-        generator = nn.parallel.replicate( self.generator, devices=devices )
-        out_scatter = nn.parallel.scatter( out, target_gpus=self.devices )
-        out_grad = [ [] for _ in out_scatter ]
-        targets = nn.parallel.scatter( targets, target_gpus=self.devices )
-
-        # Divide generating into chunks.
-        chunk_size = self.chunk_size
-        for i in range( 0, out_scatter[0].size(1), chunk_size ):
-            # Predict distributions
-            out_column = [ [ Variable( o[ :, i:i+chunk_size ].data, requires_grad=self.opt is not None )]
-                           for o in out_scatter ]
-            gen = nn.parallel.parallel_apply( generator, out_column )
-
-            # Compute loss
-            y = [ ( g.contigous().view( -1, g.size( -1 )), 
-                   t[ :, i:i+chunk_size ].contigous().view( -1 ))
-                     for g, t in zip( gen, targets ) ]
-            loss = nn.parallel.parallel_apply( self.criterion, y )
-
-            # Sum and normalize loss
-            l = nn.parallel.gather( loss, target_device=self.devices[0] )
-            l = l.sum()[0] / normalize
-            total += l.data[0]
-
-            # Backprop loss to output of transformer
-            if self.opt is not None:
-                l.backward()
-                for j, l in enumerate( loss ):
-                    out_grad[ j ].append( out_column[ j ][ 0 ].grad.data.clone() ) 
-
-        # Backprop loss to output of transformer
+    def __call__( self, x, y, norm ):
+        x = self.generator( x )
+        loss = self.criterion( x.contiguous().view( -1, x.size(-1) ),
+                               y.contiguous().view( -1 ) ) / norm
+        loss.backward()
         if self.opt is not None:
-            out_grad = [ Variable( torch.cat( og, dim=1 )) for og in out_grad ]
-            o1 = out
-            o2 = nn.parallel.gather( out_grad,
-                                     target_device=self.devices[0] )
-            o1.backward( gradient=o2 )
             self.opt.step()
             self.opt.optimizer.zero_grad()
+        return loss.item() * norm
 
-        return total * normalize                                     
+# Greedy Decoding
+V = 11
+criterion = LabelSmoothing( size=V, padding_idx=0, smoothing=0.0 )
+model = make_model( V, V, N=2 )
+model_opt = NoamOpt( model.src_embed[0].d_model, 1, 400,
+                     torch.optim.Adam( model.parameters(), lr=1, betas=( 0.9, 0.98 ), eps=1e-9 ) )
 
-# %% [markdown]
-# 我们利用前面定义的函数创建了模型、度量标准、优化器、数据迭代器和并行化：
-
-# %%
-devices = [0]
-if True:
-    pad_idx = TGT.vocab.stoi[ '<blank>' ]
-    model =make_model( len(SRC.vocab ), len(TGT.vocab ), N=6 )
-    model.cuda()
-    criterion = LabelSmoothing( size=len( TGT.vocab ), padding_idx=pad_idx, smoothing=0.1 )
-    criterion.cuda()
-    BATCH_SIZE = 1200
-    train_iter = MyIterator( train, batch_size=BATCH_SIZE, device=0, repeat=False, 
-                             sort_key=lambda x: ( len( x.src ), len( x.trg ) ), 
-                             batch_size_fn=batch_size_fn, train=True )
-    valid_iter = MyIterator( val, batch_size=BATCH_SIZE, device=0, repeat=False,
-                              sort_key=lambda x: ( len( x.src ), len( x.trg ) ),
-                              batch_size_fn=batch_size_fn, train=False )
-    model_par = nn.DataParallel( model, device_ids=devices )
-
-
-# %% [markdown]
-#         
-
-# %%
-if True:
-    model_opt = NoamOpt( model.src_embed[0].d_model, 1, 2000,
-                         torch.optim.Adam( model.parameters(), lr=0, betas=( 0.9, 0.98 ), eps=1e-9 ) )
-
-    for epoch in range( 10 ):
-        model_par.train()
-        run_epoch( ( rebatch( pad_idx, b ) for b in train_iter ),
-                    model_par,
-                    MultiGPULossCompute( model.generator, criterion,
-                                         devices=devices, opt=model_opt ))
-        model_par.eval()
-        loss = run_epoch( ( rebatch( pad_idx, b ) for b in valid_iter ),
-                           model_par, 
-                           MultiGPULossCompute( model.generator, criterion,
-                                                devices=devices, opt=None ) )
-        print( loss )
-else:
-    model = torch.load( 'iwslt.pt' )
+for epoch in range( 10 ):
+    model.train()
+    run_epoch( data_gen( V, 30, 20 ), model, 
+                SimpleLossCompute( model.generator, criterion, model_opt ))
+    model.eval()
+    print( 'eval:', run_epoch(data_gen( V, 30, 5 ), model, 
+                    SimpleLossCompute( model.generator, criterion, None ) ) )
 
