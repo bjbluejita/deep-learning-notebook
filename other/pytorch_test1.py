@@ -16,3 +16,6 @@ t = torch.tensor( [ 1, 2, 3 ] )
 print( t )
 t = t.cuda()
 print( t )
+
+a=torch.tensor([4,5,2,3])
+print( a.masked_fill(mask = torch.ByteTensor([1,0,0,1]), value=torch.tensor(-1e9)))
