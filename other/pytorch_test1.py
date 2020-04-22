@@ -39,9 +39,9 @@ word_idx = { 'hello':0, 'world':1 }
 embeds = nn.Embedding( 2, 5 )
 helloTensor = torch.LongTensor( [ word_idx[ 'hello' ]] )
 hello_idx = Variable( helloTensor )
-worldTensor = torch.LongTensor( [ word_idx[ 'hello' ]] )
-hello_idx = Variable( helloTensor )
-hello_emb = embeds( hello_idx )
+worldTensor = torch.LongTensor( [ word_idx[ 'world' ]] )
+world_idx = Variable( worldTensor )
+hello_emb = embeds( world_idx )
 print( hello_emb )
 
 

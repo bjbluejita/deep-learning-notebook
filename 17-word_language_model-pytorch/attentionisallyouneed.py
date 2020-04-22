@@ -11,6 +11,7 @@ from IPython import get_ipython
 # > https://zhuanlan.zhihu.com/p/48731949
 
 # %%
+import sys
 import numpy as np
 import torch
 import torch.nn as nn
@@ -242,7 +243,7 @@ class MultiHeaderAttention( nn.Module ):
             mask = mask.unsqueeze( 1 )
         nbatches = query.size( 0 )
         # 1) Do all the linear projections in batch from d_model => h x d_k 
-        query, key, value =             [ l(x).view( nbatches, -1, self.h, self.d_k ).transpose( 1, 2 )
+        query, key, value = [ l(x).view( nbatches, -1, self.h, self.d_k ).transpose( 1, 2 )
               for l, x in zip( self.linears, ( query, key, value )) ]
         # 2) Apply attention on all the projected vectors in batch.
         x, self.attn = attention( query, key, value, mask=mask, dropout=self.dropout )
@@ -438,7 +439,7 @@ class NoamOpt():
         "Implement `lrate` above"
         if step is None:
             step = self._step
-        return self.factor *                 ( self.model_size ** ( -0.5 ) * 
+        return self.factor * ( self.model_size ** ( -0.5 ) * 
                    min( step ** ( -0.5 ), step * self.warmup ** ( -1.5)))
 
 
@@ -458,7 +459,7 @@ plt.legend( [ '512:4000', '1024:8000', '256:4000'])
 # %% [markdown]
 # 
 # ## Label Smoothing
-#   mmnnrnrenrennren令人迷惑，但确实能改善accuracy and BLEU 成绩.
+#  令人迷惑，但确实能改善accuracy and BLEU 成绩.
 
 # %%
 class LabelSmoothing( nn.Module ):
@@ -552,4 +553,7 @@ for epoch in range( 10 ):
     model.eval()
     print( 'eval:', run_epoch(data_gen( V, 30, 5 ), model, 
                     SimpleLossCompute( model.generator, criterion, None ) ) )
+
+print( '---finished---' )
+sys.exit( 0 )
 
