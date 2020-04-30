@@ -20,6 +20,7 @@ import math, time, copy
 from torch.autograd import  Variable
 import matplotlib.pyplot as plt
 import seaborn
+import spacy
 # For data loading.
 from torchtext import data, datasets
 seaborn.set_context( context='talk' )
@@ -337,7 +338,7 @@ def make_model( src_vocab, tgt_vocab, N=6, d_model=512, d_ff=2048, h=8, dropout=
 
 # %%
 tmp_model = make_model(10, 10, 2)
-print( tmp_model )
+# print( tmp_model )
 
 # %% [markdown]
 # 
@@ -610,7 +611,7 @@ class MultiGPULossCompute:
 
     def __call__( self, out, targets, normalize ):
         total = 0.0
-        generator = nn.parallel.replicate( self.generator, devices=devices )
+        generator = nn.parallel.replicate( self.generator, devices=self.devices )
         out_scatter = nn.parallel.scatter( out, target_gpus=self.devices )
         out_grad = [ [] for _ in out_scatter ]
         targets = nn.parallel.scatter( targets, target_gpus=self.devices )
@@ -624,15 +625,15 @@ class MultiGPULossCompute:
             gen = nn.parallel.parallel_apply( generator, out_column )
 
             # Compute loss
-            y = [ ( g.contigous().view( -1, g.size( -1 )), 
-                   t[ :, i:i+chunk_size ].contigous().view( -1 ))
+            y = [ ( g.contiguous().view( -1, g.size( -1 )), 
+                   t[ :, i:i+chunk_size ].contiguous().view( -1 ))
                      for g, t in zip( gen, targets ) ]
             loss = nn.parallel.parallel_apply( self.criterion, y )
 
             # Sum and normalize loss
             l = nn.parallel.gather( loss, target_device=self.devices[0] )
-            l = l.sum()[0] / normalize
-            total += l.data[0]
+            l = l.sum() / normalize
+            total += l.item()
 
             # Backprop loss to output of transformer
             if self.opt is not None:
@@ -652,10 +653,8 @@ class MultiGPULossCompute:
 
         return total * normalize   
 
-
-
-if True:
-    import spacy
+def main():
+    
     spacy_de = spacy.load('de')
     spacy_en = spacy.load('en')
 
@@ -683,11 +682,11 @@ if True:
     devices = [0]
 
     pad_idx = TGT.vocab.stoi[ '<blank>' ]
-    model =make_model( len(SRC.vocab ), len(TGT.vocab ), N=6 )
+    model = make_model( len(SRC.vocab ), len(TGT.vocab ), N=6 )
     model.cuda()
     criterion = LabelSmoothing( size=len( TGT.vocab ), padding_idx=pad_idx, smoothing=0.1 )
     criterion.cuda()
-    BATCH_SIZE = 12000
+    BATCH_SIZE = 20
     train_iter = MyIterator( train, batch_size=BATCH_SIZE, device=0, repeat=False, 
                              sort_key=lambda x: ( len( x.src ), len( x.trg ) ), 
                              batch_size_fn=batch_size_fn, train=True )
@@ -696,7 +695,24 @@ if True:
                               batch_size_fn=batch_size_fn, train=False )
     model_par = nn.DataParallel( model, device_ids=devices )
 
+    model_opt = NoamOpt( model.src_embed[0].d_model, 1, 2000,
+                         torch.optim.Adam( model.parameters(), lr=0, betas=( 0.9, 0.98 ), eps=1e-9 ) )
 
-print( '---finished---' )
-sys.exit( 0 ) 
+    for epoch in range( 10 ):
+        model_par.train()
+        run_epoch( ( rebatch( pad_idx, b ) for b in train_iter ),
+                    model_par,
+                    SimpleLossCompute( model.generator, criterion,
+                                       opt=model_opt ))
+        model_par.eval()
+        loss = run_epoch( ( rebatch( pad_idx, b ) for b in valid_iter ),
+                           model_par, 
+                           SimpleLossCompute( model.generator, criterion,
+                                              opt=None ) )
+        print( loss )
+
+
+if __name__ == '__main__':
+    main()
+    print( '---finished---' )
 
