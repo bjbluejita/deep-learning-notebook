@@ -21,10 +21,15 @@ from torch.autograd import  Variable
 import matplotlib.pyplot as plt
 import seaborn
 import spacy
+import os
 # For data loading.
 from torchtext import data, datasets
 seaborn.set_context( context='talk' )
 # get_ipython().magic('matplotlib inline')
+
+device = torch.device( 'cuda' if torch.cuda.is_available() else 'cpu' )
+
+modelFilePath = '/content/gdrive/My Drive/Colab Notebooks/17-word_language_model-pytorch/transformer.pt'
 
 # %% [markdown]
 # The first is a multi-head self-attention mechanism, and the second is a simple, position-wise fully connected feed- forward network.<br>
@@ -332,7 +337,7 @@ def make_model( src_vocab, tgt_vocab, N=6, d_model=512, d_ff=2048, h=8, dropout=
     # Initialize parameters with Glorot / fan_avg.
     for p in model.parameters():
         if p.dim() > 1:
-            nn.init.xavier_uniform( p )
+            nn.init.xavier_uniform_( p )
     return model
 
 
@@ -348,9 +353,10 @@ tmp_model = make_model(10, 10, 2)
 class Batch( ):
     "Object for holding a batch of data with mask during training."
     def __init__( self, src, trg=None, pad=0 ):
-        self.src = src
+        self.src = src.to( device )
         self.src_mask = ( src != pad ).unsqueeze( -2 )
         if trg is not None:
+            trg = trg.to( device )
             self.trg = trg[ :, :-1 ]
             self.trg_y = trg[ :, 1: ]
             self.trg_mask = self.make_std_mask( self.trg, pad  )
@@ -385,11 +391,13 @@ def run_epoch( data_iter, model, loss_compute ):
         total_tokens += batch.ntokens
         tokens += batch.ntokens
 
-        if i % 50 == 1:
+        if i % 100 == 1:
             elapsed = time.time() - start
             print( 'Epoch Step: %4d Loss:%5.4f Tokens per sec  %4.2f' % ( i, loss / batch.ntokens, tokens / elapsed ))
             start = time.time()
             tokens = 0
+
+            torch.save( model.state_dict(), modelFilePath )
     
     return total_loss / total_tokens
 
@@ -679,36 +687,46 @@ def main():
     SRC.build_vocab(train.src, min_freq=MIN_FREQ)
     TGT.build_vocab(train.trg, min_freq=MIN_FREQ) 
 
-    devices = [0]
-
     pad_idx = TGT.vocab.stoi[ '<blank>' ]
     model = make_model( len(SRC.vocab ), len(TGT.vocab ), N=6 )
-    model.cuda()
+    model.to( device )
     criterion = LabelSmoothing( size=len( TGT.vocab ), padding_idx=pad_idx, smoothing=0.1 )
-    criterion.cuda()
+    criterion.to( device )
+
     BATCH_SIZE = 20
-    train_iter = MyIterator( train, batch_size=BATCH_SIZE, device=0, repeat=False, 
+    train_iter = MyIterator( train, batch_size=BATCH_SIZE, device=device, repeat=False, 
                              sort_key=lambda x: ( len( x.src ), len( x.trg ) ), 
                              batch_size_fn=batch_size_fn, train=True )
-    valid_iter = MyIterator( val, batch_size=BATCH_SIZE, device=0, repeat=False,
+    valid_iter = MyIterator( val, batch_size=BATCH_SIZE, device=device, repeat=False,
                               sort_key=lambda x: ( len( x.src ), len( x.trg ) ),
                               batch_size_fn=batch_size_fn, train=False )
-    model_par = nn.DataParallel( model, device_ids=devices )
+
+    # model_par = nn.DataParallel( model )
+
+    for b in train_iter:
+        print( pad_idx, '[', b.src , ']' )
+        b = rebatch( pad_idx, b )
+        print( b.src )
 
     model_opt = NoamOpt( model.src_embed[0].d_model, 1, 2000,
                          torch.optim.Adam( model.parameters(), lr=0, betas=( 0.9, 0.98 ), eps=1e-9 ) )
 
+    if os.path.exists( modelFilePath ):
+        print( 'Load model...' )
+        model.load_state_dict( torch.load( modelFilePath ) )
+
     for epoch in range( 10 ):
-        model_par.train()
+        model.train()
         run_epoch( ( rebatch( pad_idx, b ) for b in train_iter ),
-                    model_par,
+                    model,
                     SimpleLossCompute( model.generator, criterion,
                                        opt=model_opt ))
-        model_par.eval()
+        model.eval()
         loss = run_epoch( ( rebatch( pad_idx, b ) for b in valid_iter ),
-                           model_par, 
+                           model, 
                            SimpleLossCompute( model.generator, criterion,
                                               opt=None ) )
+        
         print( loss )
 
 
