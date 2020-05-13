@@ -9,6 +9,8 @@ from IPython import get_ipython
 # > http://nlp.seas.harvard.edu/2018/04/03/attention.html#encoder
 # 
 # > https://zhuanlan.zhihu.com/p/48731949
+#
+# > https://zhuanlan.zhihu.com/p/137578323
 
 # %%
 import sys
@@ -29,7 +31,7 @@ seaborn.set_context( context='talk' )
 
 device = torch.device( 'cuda' if torch.cuda.is_available() else 'cpu' )
 
-modelFilePath = '/content/gdrive/My Drive/Colab Notebooks/17-word_language_model-pytorch/transformer.pt'
+modelFilePath = 'transformer.pt'
 
 # %% [markdown]
 # The first is a multi-head self-attention mechanism, and the second is a simple, position-wise fully connected feed- forward network.<br>
@@ -702,11 +704,6 @@ def main():
                               batch_size_fn=batch_size_fn, train=False )
 
     # model_par = nn.DataParallel( model )
-
-    for b in train_iter:
-        print( pad_idx, '[', b.src , ']' )
-        b = rebatch( pad_idx, b )
-        print( b.src )
 
     model_opt = NoamOpt( model.src_embed[0].d_model, 1, 2000,
                          torch.optim.Adam( model.parameters(), lr=0, betas=( 0.9, 0.98 ), eps=1e-9 ) )
