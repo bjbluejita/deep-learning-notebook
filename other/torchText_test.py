@@ -61,10 +61,10 @@ test_examples, test_fields = get_dataset( test_data, TEXT, None, test=True )
 train = data.Dataset( train_examples, train_fields )
 valid = data.Dataset(valid_examples, valid_fields)
 test = data.Dataset(test_examples, test_fields)
-'''
+
 for batch in train:
     print( batch.toxic )
-'''
+
 
 # 自定义Dataset类
 class MyDataset( data.Dataset ):

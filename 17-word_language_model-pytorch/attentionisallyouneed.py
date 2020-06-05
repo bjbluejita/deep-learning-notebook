@@ -24,6 +24,11 @@ import matplotlib.pyplot as plt
 import seaborn
 import spacy
 import os
+import re
+from tqdm import tqdm
+
+import thulac
+
 # For data loading.
 from torchtext import data, datasets
 seaborn.set_context( context='talk' )
@@ -32,6 +37,7 @@ seaborn.set_context( context='talk' )
 device = torch.device( 'cuda' if torch.cuda.is_available() else 'cpu' )
 
 modelFilePath = 'transformer.pt'
+train_path = 'E:/ML_data/translate/cmn.txt'
 
 # %% [markdown]
 # The first is a multi-head self-attention mechanism, and the second is a simple, position-wise fully connected feed- forward network.<br>
@@ -663,7 +669,7 @@ class MultiGPULossCompute:
 
         return total * normalize   
 
-def main():
+def main_de_en():
     
     spacy_de = spacy.load('de')
     spacy_en = spacy.load('en')
@@ -726,8 +732,76 @@ def main():
         
         print( loss )
 
+def main_cn_en():
+
+    spacy_en = spacy.load('en')
+
+    thu1 = thulac.thulac( seg_only=True )  #默认模式
+
+    def tokenize_en(text):
+        return [tok.text for tok in spacy_en.tokenizer(text)]
+
+    def tokenize_cn(text):
+        return [tok for tok in thu1.cut(text, text=True )]
+
+    BOS_WORD = '<s>'
+    EOS_WORD = '</s>'
+    BLANK_WORD = "<blank>"
+    SRC = data.Field(tokenize=tokenize_en, pad_token=BLANK_WORD)
+    TGT = data.Field(tokenize=tokenize_cn, init_token = BOS_WORD, 
+                     eos_token = EOS_WORD, pad_token=BLANK_WORD)
+
+    train_fields = [ ('src', SRC), ('trg', TGT ) ]       
+
+    train_examples = []
+    with open( train_path, 'r', encoding ='utf-8' )as f:
+        for line in tqdm( f.readlines() ):
+            en = re.split( r"\.|\!|\?", line.split( 'CC-BY 2.0' )[0].strip() )[0]
+            cn = re.split( r"\.|\!|\?", line.split( 'CC-BY 2.0' )[0].strip() )[1].replace( '\t', '' )
+            # print( [ en, cn ] )
+            # print( thu1.cut( cn, text=True ))
+            train_examples.append( data.Example.fromlist( [ en, cn ], train_fields ) )
+
+    # 构建Dataset数据集
+    train = data.Dataset( train_examples, train_fields )
+
+    MIN_FREQ = 2
+    SRC.build_vocab(train.src, min_freq=MIN_FREQ)
+    TGT.build_vocab(train.trg, min_freq=MIN_FREQ) 
+
+    pad_idx = TGT.vocab.stoi[ '<blank>' ]
+    model = make_model( len(SRC.vocab ), len(TGT.vocab ), N=6 )
+    model.to( device )
+    criterion = LabelSmoothing( size=len( TGT.vocab ), padding_idx=pad_idx, smoothing=0.1 )
+    criterion.to( device )
+
+    BATCH_SIZE = 20
+    train_iter = MyIterator( train, batch_size=BATCH_SIZE, device=device, repeat=False, 
+                             sort_key=lambda x: ( len( x.src ), len( x.trg ) ), 
+                             batch_size_fn=batch_size_fn, train=True )
+    
+    # model_par = nn.DataParallel( model )
+
+    model_opt = NoamOpt( model.src_embed[0].d_model, 1, 2000,
+                         torch.optim.Adam( model.parameters(), lr=0, betas=( 0.9, 0.98 ), eps=1e-9 ) )
+
+    if os.path.exists( modelFilePath ):
+        print( 'Load model...' )
+        model.load_state_dict( torch.load( modelFilePath ) )
+
+    for epoch in range( 10 ):
+        model.train()
+        run_epoch( ( rebatch( pad_idx, b ) for b in train_iter ),
+                    model,
+                    SimpleLossCompute( model.generator, criterion,
+                                       opt=model_opt ))
+        
+        
+        print( loss )
+
+
 
 if __name__ == '__main__':
-    main()
+    main_cn_en()
     print( '---finished---' )
 
