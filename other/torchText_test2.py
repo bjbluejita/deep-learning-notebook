@@ -58,11 +58,18 @@ with open( train_path, 'r', encoding ='utf-8' )as f:
 
 
 # 构建Dataset数据集
-train = data.Dataset( train_examples, train_fields )
+train_dataset, val_dataset = data.Dataset( train_examples, train_fields ).split( split_ratio=0.8 )
+# train, val = data.Dataset( train_examples, train_fields ).split( split_ratio=0.8 )
 
 MIN_FREQ = 2
-SRC.build_vocab(train.src, min_freq=MIN_FREQ)
-TGT.build_vocab(train.trg, min_freq=MIN_FREQ) 
+SRC.build_vocab(train_dataset.src, min_freq=MIN_FREQ)
+TGT.build_vocab(train_dataset.trg, min_freq=MIN_FREQ) 
+
+# train_iter = data.Iterator( train_dataset, batch_size=20, train=True )
+train_iter = data.BucketIterator( train_dataset, batch_size=20, train=True )
+for i, batch in enumerate( train_iter ):
+    print( batch.src )
+    print( batch.trg )
 
 print( 'finished')
 

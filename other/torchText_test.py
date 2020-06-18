@@ -153,7 +153,6 @@ def main():
 
     optimizer = optim.Adam( filter( lambda p: p.requires_grad, model.parameters() ), lr=0.01 )
     loss_funtion = F.cross_entropy
-
     
     for epoch, batch in enumerate( train_iter ):
         optimizer.zero_grad()

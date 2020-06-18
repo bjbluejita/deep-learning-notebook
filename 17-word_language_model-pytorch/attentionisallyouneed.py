@@ -36,8 +36,10 @@ seaborn.set_context( context='talk' )
 
 device = torch.device( 'cuda' if torch.cuda.is_available() else 'cpu' )
 
+# modelFilePath = '/content/gdrive/My Drive/Colab Notebooks/17-word_language_model-pytorch/transformer.pt'
+# train_path = '/content/cmn.txt'
 modelFilePath = 'transformer.pt'
-train_path = 'E:/ML_data/translate/cmn.txt'
+train_path = 'E:/ML_data/translate/cmn_sample.txt'
 
 # %% [markdown]
 # The first is a multi-head self-attention mechanism, and the second is a simple, position-wise fully connected feed- forward network.<br>
@@ -392,20 +394,23 @@ def run_epoch( data_iter, model, loss_compute ):
     total_loss = 0
     tokens = 0
 
-    for i, batch in enumerate( data_iter ):
-        out = model.forward( batch.src, batch.trg, batch.src_mask, batch.trg_mask )
-        loss = loss_compute( out, batch.trg_y, batch.ntokens )
-        total_loss += loss
-        total_tokens += batch.ntokens
-        tokens += batch.ntokens
+    try:
+        for i, batch in enumerate( data_iter ):
+            out = model.forward( batch.src, batch.trg, batch.src_mask, batch.trg_mask )
+            loss = loss_compute( out, batch.trg_y, batch.ntokens )
+            total_loss += loss
+            total_tokens += batch.ntokens
+            tokens += batch.ntokens
 
-        if i % 100 == 1:
-            elapsed = time.time() - start
-            print( 'Epoch Step: %4d Loss:%5.4f Tokens per sec  %4.2f' % ( i, loss / batch.ntokens, tokens / elapsed ))
-            start = time.time()
-            tokens = 0
+            if i % 100 == 1:
+                elapsed = time.time() - start
+                print( 'Epoch Step: %4d Loss:%5.4f Tokens per sec  %4.2f' % ( i, loss / batch.ntokens, tokens / elapsed ))
+                start = time.time()
+                tokens = 0
 
-            torch.save( model.state_dict(), modelFilePath )
+                torch.save( model.state_dict(), modelFilePath )
+    except ValueError:
+        print( 'run_epoch except: len of batch.src:', len( batch.src ) )
     
     return total_loss / total_tokens
 
@@ -707,7 +712,7 @@ def main_de_en():
                              batch_size_fn=batch_size_fn, train=True )
     valid_iter = MyIterator( val, batch_size=BATCH_SIZE, device=device, repeat=False,
                               sort_key=lambda x: ( len( x.src ), len( x.trg ) ),
-                              batch_size_fn=batch_size_fn, train=False )
+                              batch_size_fn=batch_size_fn, train=False )      
 
     # model_par = nn.DataParallel( model )
 
@@ -789,19 +794,23 @@ def main_cn_en():
         print( 'Load model...' )
         model.load_state_dict( torch.load( modelFilePath ) )
 
-    for epoch in range( 10 ):
+    for b in train_iter:
+        print( b.size() )
+
+    epoches = 300
+    for epoch in range( epoches ):
+        print( 'epoch train: {}/{}'.format( epoch, epoches ))
         model.train()
-        run_epoch( ( rebatch( pad_idx, b ) for b in train_iter ),
+        loss = run_epoch( ( rebatch( pad_idx, b ) for b in train_iter ),
                     model,
                     SimpleLossCompute( model.generator, criterion,
-                                       opt=model_opt ))
-        
+                                       opt=model_opt ))       
         
         print( loss )
 
 
 
 if __name__ == '__main__':
-    main_cn_en()
+    main_de_en()
     print( '---finished---' )
 
