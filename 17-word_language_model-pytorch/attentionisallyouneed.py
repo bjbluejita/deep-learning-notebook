@@ -39,7 +39,8 @@ device = torch.device( 'cuda' if torch.cuda.is_available() else 'cpu' )
 # modelFilePath = '/content/gdrive/My Drive/Colab Notebooks/17-word_language_model-pytorch/transformer.pt'
 # train_path = '/content/cmn.txt'
 modelFilePath = 'transformer.pt'
-train_path = 'E:/ML_data/translate/cmn_sample.txt'
+# train_path = 'E:/ML_data/translate/cmn_sample.txt'
+train_path = 'E:/ML_data/translate/cmn.txt'
 
 # %% [markdown]
 # The first is a multi-head self-attention mechanism, and the second is a simple, position-wise fully connected feed- forward network.<br>
@@ -563,6 +564,21 @@ class SimpleLossCompute():
             self.opt.optimizer.zero_grad()
         return loss.item() * norm
 
+def greedy_decode(model, src, src_mask, max_len, start_symbol):
+    memory = model.encode(src, src_mask)
+    ys = torch.ones(1, 1).fill_(start_symbol).type_as(src.data)
+    for i in range(max_len-1):
+        out = model.decode(memory, src_mask, 
+                           Variable(ys), 
+                           Variable(subsequent_mask(ys.size(1))
+                                    .type_as(src.data)))
+        prob = model.generator(out[:, -1])
+        _, next_word = torch.max(prob, dim = 1)
+        next_word = next_word.data[0]
+        ys = torch.cat([ys, 
+                        torch.ones(1, 1).type_as(src.data).fill_(next_word)], dim=1)
+    return ys
+
 '''
 # Greedy Decoding
 V = 11
@@ -579,20 +595,7 @@ for epoch in range( 10 ):
     print( 'eval:', run_epoch(data_gen( V, 30, 5 ), model, 
                     SimpleLossCompute( model.generator, criterion, None ) ) )
 
-def greedy_decode(model, src, src_mask, max_len, start_symbol):
-    memory = model.encode(src, src_mask)
-    ys = torch.ones(1, 1).fill_(start_symbol).type_as(src.data)
-    for i in range(max_len-1):
-        out = model.decode(memory, src_mask, 
-                           Variable(ys), 
-                           Variable(subsequent_mask(ys.size(1))
-                                    .type_as(src.data)))
-        prob = model.generator(out[:, -1])
-        _, next_word = torch.max(prob, dim = 1)
-        next_word = next_word.data[0]
-        ys = torch.cat([ys, 
-                        torch.ones(1, 1).type_as(src.data).fill_(next_word)], dim=1)
-    return ys
+
 
 model.eval()
 src = Variable(torch.LongTensor([[1,8,1,4,5,6,7,4,9,10]]) )
@@ -615,6 +618,21 @@ class MyIterator( data.Iterator ):
             self.batches = []
             for b in data.batch( self.data(), self.batch_size, self.batch_size_fn ):
                 self.batches.append( sorted( b, key=self.sort_key ) )
+
+
+class MyIterator_test( data.Iterator ):
+    def create_batches( self ):
+        def pool( d, random_shuffler ):
+            for p in data.batch( d, self.batch_size * 100 ):
+                p_batch = data.batch( sorted( p, key=self.sort_key ),
+                                      self.batch_size, self.batch_size_fn )
+                j = 0
+                for b in list( p_batch ):
+                    print( j, '->', b )
+                    j += 1
+                    yield b
+        
+        self.batches = pool( self.data(), self.random_shuffler )
 
 def rebatch( pad_idx, batch ):
     "Fix order in torchtext to match ours"
@@ -784,7 +802,8 @@ def main_cn_en():
     train_iter = MyIterator( train, batch_size=BATCH_SIZE, device=device, repeat=False, 
                              sort_key=lambda x: ( len( x.src ), len( x.trg ) ), 
                              batch_size_fn=batch_size_fn, train=True )
-    
+
+  
     # model_par = nn.DataParallel( model )
 
     model_opt = NoamOpt( model.src_embed[0].d_model, 1, 2000,
@@ -792,10 +811,7 @@ def main_cn_en():
 
     if os.path.exists( modelFilePath ):
         print( 'Load model...' )
-        model.load_state_dict( torch.load( modelFilePath ) )
-
-    for b in train_iter:
-        print( b.size() )
+        model.load_state_dict( torch.load( modelFilePath ) )    
 
     epoches = 300
     for epoch in range( epoches ):
@@ -804,13 +820,79 @@ def main_cn_en():
         loss = run_epoch( ( rebatch( pad_idx, b ) for b in train_iter ),
                     model,
                     SimpleLossCompute( model.generator, criterion,
-                                       opt=model_opt ))       
-        
+                                       opt=model_opt ))              
         print( loss )
 
+def testEnToCn():
+    spacy_en = spacy.load('en')
 
+    thu1 = thulac.thulac( seg_only=True )  #默认模式
+
+    def tokenize_en(text):
+        return [tok.text for tok in spacy_en.tokenizer(text)]
+
+    def tokenize_cn(text):
+        return [tok for tok in thu1.cut(text, text=True )]
+
+    BOS_WORD = '<s>'
+    EOS_WORD = '</s>'
+    BLANK_WORD = "<blank>"
+    SRC = data.Field(tokenize=tokenize_en, pad_token=BLANK_WORD)
+    TGT = data.Field(tokenize=tokenize_cn, init_token = BOS_WORD, 
+                     eos_token = EOS_WORD, pad_token=BLANK_WORD)
+
+    train_fields = [ ('src', SRC), ('trg', TGT ) ]       
+
+    train_examples = []
+    with open( train_path, 'r', encoding ='utf-8' )as f:
+        for line in tqdm( f.readlines() ):
+            en = re.split( r"\.|\!|\?", line.split( 'CC-BY 2.0' )[0].strip() )[0]
+            cn = re.split( r"\.|\!|\?", line.split( 'CC-BY 2.0' )[0].strip() )[1].replace( '\t', '' )
+            # print( [ en, cn ] )
+            # print( thu1.cut( cn, text=True ))
+            train_examples.append( data.Example.fromlist( [ en, cn ], train_fields ) )
+
+    # 构建Dataset数据集
+    train = data.Dataset( train_examples, train_fields )
+
+    MIN_FREQ = 2
+    SRC.build_vocab(train.src, min_freq=MIN_FREQ)
+    TGT.build_vocab(train.trg, min_freq=MIN_FREQ) 
+
+    pad_idx = TGT.vocab.stoi[ '<blank>' ]
+    
+    modelEvl = make_model( len(SRC.vocab ), len(TGT.vocab ), N=6 )
+    modelEvl.load_state_dict( torch.load( modelFilePath ) )
+    modelEvl.eval()
+
+    testStr = "Nothing happened."
+    testTokens = tokenize_en( testStr )
+    testTokens = torch.Tensor( [[ SRC.vocab.stoi[ token ] for token in testTokens  ]] ).long()
+    testTokens_mask = ( testTokens != SRC.vocab.stoi[ BLANK_WORD ]).unsqueeze( -2 )
+
+    memory = modelEvl.encode( testTokens, testTokens_mask )
+
+    ys = torch.ones(1, 1).fill_( TGT.vocab.stoi[ BOS_WORD ] ).type_as( testTokens.data)
+    for i in range( 20 ):
+        out = modelEvl.decode(memory, testTokens_mask, 
+                           Variable(ys), 
+                           Variable(subsequent_mask(ys.size(1)).type_as( testTokens.data )))
+        prob = modelEvl.generator(out[:, -1])
+        _, next_word = torch.max( prob, dim=1 )
+        next_word = next_word.item()
+        ys = torch.cat( [ ys,
+                         torch.ones( 1, 1 ).type_as( testTokens.data ).fill_( next_word )], dim=1 )
+    
+    for i in range( 1, ys.size(1) ):
+        sym = TGT.vocab.itos[ ys[ 0, i ] ]
+        if sym == "</s>": break
+        print( sym, end='' )
+    print()
+
+    return ys
 
 if __name__ == '__main__':
-    main_de_en()
+    # main_cn_en()
+    print( testEnToCn() )
     print( '---finished---' )
 

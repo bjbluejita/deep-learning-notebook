@@ -65,11 +65,11 @@ MIN_FREQ = 2
 SRC.build_vocab(train_dataset.src, min_freq=MIN_FREQ)
 TGT.build_vocab(train_dataset.trg, min_freq=MIN_FREQ) 
 
-# train_iter = data.Iterator( train_dataset, batch_size=20, train=True )
-train_iter = data.BucketIterator( train_dataset, batch_size=20, train=True )
+train_iter = data.Iterator( train_dataset, batch_size=5, train=True )
+#train_iter = data.BucketIterator( train_dataset, batch_size=5, train=True )
 for i, batch in enumerate( train_iter ):
-    print( batch.src )
-    print( batch.trg )
+    print( 'src->', batch.src )
+    print( 'trg->', batch.trg )
 
 print( 'finished')
 
