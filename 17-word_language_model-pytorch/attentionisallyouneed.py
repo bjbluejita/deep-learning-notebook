@@ -39,8 +39,8 @@ device = torch.device( 'cuda' if torch.cuda.is_available() else 'cpu' )
 # modelFilePath = '/content/gdrive/My Drive/Colab Notebooks/17-word_language_model-pytorch/transformer.pt'
 # train_path = '/content/cmn.txt'
 modelFilePath = 'transformer.pt'
-# train_path = 'E:/ML_data/translate/cmn_sample.txt'
-train_path = 'E:/ML_data/translate/cmn.txt'
+train_path = 'E:/ML_data/translate/cmn_sample.txt'
+# train_path = 'E:/ML_data/translate/cmn.txt'
 
 # %% [markdown]
 # The first is a multi-head self-attention mechanism, and the second is a simple, position-wise fully connected feed- forward network.<br>
@@ -405,7 +405,7 @@ def run_epoch( data_iter, model, loss_compute ):
 
             if i % 100 == 1:
                 elapsed = time.time() - start
-                print( 'Epoch Step: %4d Loss:%5.4f Tokens per sec  %4.2f' % ( i, loss / batch.ntokens, tokens / elapsed ))
+                print( 'Epoch Step: %4d Loss:%5.4f Tokens per sec  %4.2f' % ( i, loss / batch.ntokens.item(), tokens / elapsed ))
                 start = time.time()
                 tokens = 0
 
@@ -500,9 +500,10 @@ class LabelSmoothing( nn.Module ):
 
     def forward( self, x, target ):
         assert x.size(1) == self.size
-        true_dist = x.data.clone()
-        true_dist.fill_( self.smoothing / ( self.size - 2 ) )
-        true_dist.scatter_( 1, target.data.unsqueeze(1), self.confidence )
+        true_dist = x.data.clone()  # 先深复制过来
+        true_dist.fill_( self.smoothing / ( self.size - 2 ) )  # otherwise的公式
+        # 变成one-hot编码，1表示按列填充，target.data.unsqueeze(1)表示索引, confidence表示填充的数字
+        true_dist.scatter_( 1, target.data.unsqueeze(1), self.confidence )  
         true_dist[ :, self.padding_idx ] = 0
         mask = torch.nonzero( target.data == self.padding_idx )
         if mask.dim() > 0:
@@ -510,27 +511,6 @@ class LabelSmoothing( nn.Module ):
         self.true_dist = true_dist
         return self.criterion( x, Variable( true_dist, requires_grad=False ) )
 
-
-# %%
-# Example of label smoothing.
-crit = LabelSmoothing( 5, 0, 0.4 )
-predict = torch.FloatTensor( [[0, 0.2, 0.7, 0.1, 0],
-                             [0, 0.2, 0.7, 0.1, 0], 
-                             [0, 0.2, 0.7, 0.1, 0]] )
-v = crit( Variable( predict.log() ), Variable( torch.LongTensor( [ 2, 1, 0 ] ) ) )
-plt.imshow( crit.true_dist )
-
-# %% [markdown]
-# 当model对选择给出非常有信心时， sjissjsjisjiisj实际上会开始惩罚model（防止过拟？)
-
-# %%
-crit = LabelSmoothing( 5, 0, 0.1 )
-def loss( x ):
-    d = x + 3 * 1
-    predict = torch.FloatTensor( [[ 0, x/d, 1/d, 1/d, 1/d ]] )
-    return crit( Variable( predict.log() ), Variable( torch.LongTensor( [1] ) ) ).item()
-
-plt.plot( np.arange(1, 100), [loss(x) for x in range(1, 100)] )
 
 # %% [markdown]
 # # A First Example
@@ -562,7 +542,7 @@ class SimpleLossCompute():
         if self.opt is not None:
             self.opt.step()
             self.opt.optimizer.zero_grad()
-        return loss.item() * norm
+        return ( loss * norm ).item()
 
 def greedy_decode(model, src, src_mask, max_len, start_symbol):
     memory = model.encode(src, src_mask)
@@ -791,6 +771,8 @@ def main_cn_en():
     MIN_FREQ = 2
     SRC.build_vocab(train.src, min_freq=MIN_FREQ)
     TGT.build_vocab(train.trg, min_freq=MIN_FREQ) 
+    # print( 'SRC vocab stoi:', SRC.vocab.stoi )
+    # print( 'TGT vocab stoi:', TGT.vocab.stoi )
 
     pad_idx = TGT.vocab.stoi[ '<blank>' ]
     model = make_model( len(SRC.vocab ), len(TGT.vocab ), N=6 )
@@ -865,7 +847,7 @@ def testEnToCn():
     modelEvl.load_state_dict( torch.load( modelFilePath ) )
     modelEvl.eval()
 
-    testStr = "Nothing happened."
+    testStr = "I must have caught a cold."
     testTokens = tokenize_en( testStr )
     testTokens = torch.Tensor( [[ SRC.vocab.stoi[ token ] for token in testTokens  ]] ).long()
     testTokens_mask = ( testTokens != SRC.vocab.stoi[ BLANK_WORD ]).unsqueeze( -2 )
@@ -892,7 +874,7 @@ def testEnToCn():
     return ys
 
 if __name__ == '__main__':
-    # main_cn_en()
-    print( testEnToCn() )
+    main_cn_en()
+    # print( testEnToCn() )
     print( '---finished---' )
 
