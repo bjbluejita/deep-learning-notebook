@@ -365,7 +365,7 @@ class Batch( ):
     "Object for holding a batch of data with mask during training."
     def __init__( self, src, trg=None, pad=0 ):
         self.src = src.to( device )
-        self.src_mask = ( src != pad ).unsqueeze( -2 )
+        self.src_mask = ( self.src != pad ).unsqueeze( -2 )
         if trg is not None:
             trg = trg.to( device )
             self.trg = trg[ :, :-1 ]
@@ -600,20 +600,6 @@ class MyIterator( data.Iterator ):
                 self.batches.append( sorted( b, key=self.sort_key ) )
 
 
-class MyIterator_test( data.Iterator ):
-    def create_batches( self ):
-        def pool( d, random_shuffler ):
-            for p in data.batch( d, self.batch_size * 100 ):
-                p_batch = data.batch( sorted( p, key=self.sort_key ),
-                                      self.batch_size, self.batch_size_fn )
-                j = 0
-                for b in list( p_batch ):
-                    print( j, '->', b )
-                    j += 1
-                    yield b
-        
-        self.batches = pool( self.data(), self.random_shuffler )
-
 def rebatch( pad_idx, batch ):
     "Fix order in torchtext to match ours"
     src, trg = batch.src.transpose( 0, 1 ), batch.trg.transpose( 0, 1 )
@@ -782,9 +768,12 @@ def main_cn_en():
     criterion.to( device )
 
     BATCH_SIZE = 20
+    '''
     train_iter = MyIterator( train, batch_size=BATCH_SIZE, device=device, repeat=False, 
                              sort_key=lambda x: ( len( x.src ), len( x.trg ) ), 
                              batch_size_fn=batch_size_fn, train=True )
+    '''
+    train_iter = data.Iterator( train, batch_size=BATCH_SIZE, train=True )
 
   
     # model_par = nn.DataParallel( model )
