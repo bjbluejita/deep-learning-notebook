@@ -670,7 +670,7 @@ class MultiGPULossCompute:
             self.opt.step()
             self.opt.optimizer.zero_grad()
 
-        return total * normalize   
+        return total * normalize.float()
 
 def main_de_en():
     
@@ -736,6 +736,7 @@ def main_de_en():
         print( loss )
 
 def main_cn_en():
+    devices = [0]
 
     spacy_en = spacy.load('en')
 
@@ -801,8 +802,8 @@ def main_cn_en():
         model.train()
         loss = run_epoch( ( rebatch( pad_idx, b ) for b in train_iter ),
                     model,
-                    SimpleLossCompute( model.generator, criterion,
-                                       opt=model_opt ))              
+                    MultiGPULossCompute( model.generator, criterion,
+                                         devices=devices, opt=model_opt ))              
         print( loss )
 
 def testEnToCn():
