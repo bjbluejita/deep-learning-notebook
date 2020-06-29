@@ -39,8 +39,8 @@ device = torch.device( 'cuda' if torch.cuda.is_available() else 'cpu' )
 # modelFilePath = '/content/gdrive/My Drive/Colab Notebooks/17-word_language_model-pytorch/transformer.pt'
 # train_path = '/content/cmn.txt'
 modelFilePath = 'transformer.pt'
-train_path = 'E:/ML_data/translate/cmn_sample.txt'
-# train_path = 'E:/ML_data/translate/cmn.txt'
+# train_path = 'E:/ML_data/translate/cmn_sample.txt'
+train_path = 'E:/ML_data/translate/cmn.txt'
 
 # %% [markdown]
 # The first is a multi-head self-attention mechanism, and the second is a simple, position-wise fully connected feed- forward network.<br>
@@ -767,14 +767,13 @@ def main_cn_en():
     criterion = LabelSmoothing( size=len( TGT.vocab ), padding_idx=pad_idx, smoothing=0.1 )
     criterion.to( device )
 
-    BATCH_SIZE = 20
+    BATCH_SIZE = 25
     '''
     train_iter = MyIterator( train, batch_size=BATCH_SIZE, device=device, repeat=False, 
                              sort_key=lambda x: ( len( x.src ), len( x.trg ) ), 
                              batch_size_fn=batch_size_fn, train=True )
     '''
     train_iter = data.Iterator( train, batch_size=BATCH_SIZE, train=True )
-
   
     # model_par = nn.DataParallel( model )
 
