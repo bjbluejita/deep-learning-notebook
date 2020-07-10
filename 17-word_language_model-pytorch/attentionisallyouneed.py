@@ -413,7 +413,7 @@ def run_epoch( data_iter, model, loss_compute ):
     except ValueError:
         print( 'run_epoch except: len of batch.src:', len( batch.src ) )
     
-    return total_loss / total_tokens
+    return ( total_loss / total_tokens.float() ).item()
 
 # %% [markdown]
 # and Batching
@@ -836,7 +836,7 @@ def testEnToCn():
     modelEvl.load_state_dict( torch.load( modelFilePath ) )
     modelEvl.eval()
 
-    testStr = "I must have caught a cold."
+    testStr = "We want water."
     testTokens = tokenize_en( testStr )
     testTokens = torch.Tensor( [[ SRC.vocab.stoi[ token ] for token in testTokens  ]] ).long()
     testTokens_mask = ( testTokens != SRC.vocab.stoi[ BLANK_WORD ]).unsqueeze( -2 )
@@ -863,7 +863,7 @@ def testEnToCn():
     return ys
 
 if __name__ == '__main__':
-    main_cn_en()
-    # print( testEnToCn() )
+    # main_cn_en()
+    print( testEnToCn() )
     print( '---finished---' )
 
