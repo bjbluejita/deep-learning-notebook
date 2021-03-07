@@ -836,7 +836,7 @@ def testEnToCn():
     modelEvl.load_state_dict( torch.load( modelFilePath ) )
     modelEvl.eval()
 
-    testStr = "We want water."
+    testStr = "I'm very hot."
     testTokens = tokenize_en( testStr )
     testTokens = torch.Tensor( [[ SRC.vocab.stoi[ token ] for token in testTokens  ]] ).long()
     testTokens_mask = ( testTokens != SRC.vocab.stoi[ BLANK_WORD ]).unsqueeze( -2 )
